@@ -1,0 +1,529 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>宋新村的博客</title>
+    <description>记录思绪的点点滴滴</description>
+    <link>http://yourdomain.com/</link>
+    <atom:link href="http://yourdomain.com/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Wed, 20 May 2015 18:23:17 +0800</pubDate>
+    <lastBuildDate>Wed, 20 May 2015 18:23:17 +0800</lastBuildDate>
+    <generator>Jekyll v2.3.0</generator>
+    
+      <item>
+        <title>DataNode 异常：Connection reset by peer</title>
+        <description>&lt;blockquote&gt;
+&lt;p&gt;这个参数之前很早就明确过了，设为1时，连接繁忙时容易找出 reset 的情况，不适合 master 的应用场景&lt;br&gt;
+期望是，所有的 master 节点配置为0，比如 NameSpace、FMS、Adapter 等&lt;/p&gt;
+
+&lt;p&gt;刚刚发现 ecomoff 集群上某些 master 上配置为1，从用户日志上看，有 client 连接 FMS04 出现 reset&lt;/p&gt;
+
+&lt;p&gt;请 OP 同学集中检查一下该配置项的配置&lt;/p&gt;
+
+&lt;p&gt;另外 /proc/sys/net/ipv4/tcp_max_syn_backlog 参数也是配置不一，1024和10240的都有，是否可以统一一下？&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;DataNode 中出现大量异常：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-text&quot; data-lang=&quot;text&quot;&gt;2014-12-09 22:46:41,492 WARN org.apache.hadoop.hdfs.server.datanode.DataNode: java.io.IOException: Call to nj01-opensource-hdfs.rp.baidu.com/10.214.63.53:54310 failed on local exception: java.io.IOException: Connection reset by peer
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;最终的解决方法是所有的 master 节点执行：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-text&quot; data-lang=&quot;text&quot;&gt;echo 0 &amp;gt; /proc/sys/net/ipv4/tcp_abort_on_overflow
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;关于 TCP/IP 协议参数的详细文章可以参见：&lt;br&gt;
+&lt;a href=&quot;http://www.cnblogs.com/OnlyXP/archive/2007/09/29/911269.html&quot;&gt;http://www.cnblogs.com/OnlyXP/archive/2007/09/29/911269.html&lt;/a&gt;&lt;/p&gt;
+</description>
+        <pubDate>Tue, 24 Feb 2015 05:25:32 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2015/02/24/namenode-connection-reset-by-peer</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2015/02/24/namenode-connection-reset-by-peer</guid>
+        
+        
+        <category>hadoop</category>
+        
+      </item>
+    
+      <item>
+        <title>利用 Flume 来将切割后的静态文件上传到 HDFS</title>
+        <description>&lt;h3&gt;配置&lt;/h3&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span class=&quot;c&quot;&gt;# example.conf: A single-node Flume configuration&lt;/span&gt;
+
+&lt;span class=&quot;c&quot;&gt;# Name the components on this agent&lt;/span&gt;
+a1.sources &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; r1
+a1.sinks &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; k1
+a1.channels &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+
+&lt;span class=&quot;c&quot;&gt;# Describe/configure the source&lt;/span&gt;
+a1.sources.r1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; spooldir
+a1.sources.r1.ignorePattern &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; ^&lt;span class=&quot;err&quot;&gt;$&lt;/span&gt;
+a1.sources.r1.basenameHeader &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;true&lt;/span&gt;
+a1.sources.r1.basenameHeaderKey &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; filename
+a1.sources.r1.spoolDir &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; /home/work/pi/log/recsys_s_online/recsys_s_online_al/
+
+a1.sources.r1.deserializer.maxLineLength &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 40960
+
+a1.sources.r1.interceptors &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; i1
+a1.sources.r1.interceptors.i1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; static
+a1.sources.r1.interceptors.i1.key &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; hostname
+a1.sources.r1.interceptors.i1.value &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; nj02-rp-5yue-bu-recommend-personal117.nj02.baidu.com
+
+&lt;span class=&quot;c&quot;&gt;# Describe the sink&lt;/span&gt;
+a1.sinks.k1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; hdfs
+a1.sinks.k1.channel &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+a1.sinks.k1.hdfs.path &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; hdfs://nj01-rp-arch-namenode00.nj01.baidu.com:54310/user/rp-rd/ouyanlin/recsys_s_online_al/%&lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;hostname&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+a1.sinks.k1.hdfs.fileType &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; DataStream
+a1.sinks.k1.hdfs.filePrefix &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; %&lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;filename&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+a1.sinks.k1.hdfs.hdfs.writeFormat&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; Text
+a1.sinks.k1.hdfs.inUsePrefix &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; .
+&lt;span class=&quot;c&quot;&gt;#a1.sinks.k1.hdfs.filePrefix = events-&lt;/span&gt;
+a1.sinks.k1.hdfs.rollInterval&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 900
+a1.sinks.k1.hdfs.rollSize&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+a1.sinks.k1.hdfs.rollCount&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+a1.sinks.k1.hdfs.round &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;true&lt;/span&gt;
+a1.sinks.k1.hdfs.roundValue &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 30
+a1.sinks.k1.hdfs.roundUnit &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; minute
+a1.sinks.k1.hdfs.useLocalTimeStamp &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;true&lt;/span&gt;
+
+&lt;span class=&quot;c&quot;&gt;# Use a channel which buffers events in memory&lt;/span&gt;
+a1.channels.c1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; memory
+a1.channels.c1.capacity &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 1000
+a1.channels.c1.transactionCapacity &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 100
+
+&lt;span class=&quot;c&quot;&gt;# Bind the source and sink to the channel&lt;/span&gt;
+a1.sources.r1.channels &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+a1.sinks.k1.channel &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;环境变量可以在 conf/flume-env.sh 配置文件里面配置&lt;/p&gt;
+
+&lt;p&gt;log 相关的配置可以在 conf/log4j.properties 配置文件里面配置&lt;/p&gt;
+
+&lt;h3&gt;flume 启动命令&lt;/h3&gt;
+
+&lt;p&gt;bin/flume-ng agent --conf ./conf --conf-file ./conf/flume-conf.properties --name a1&lt;/p&gt;
+
+&lt;p&gt;之前遇到了程序动不动就报&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;File has been modified since being read&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;然后退出，最终的解决方案参见：&lt;a href=&quot;Flume%20%E9%81%87%E5%88%B0%E7%9A%84%E9%97%AE%E9%A2%98%E5%8F%8A%E4%BF%AE%E6%94%B9%E4%BB%A3%E7%A0%81%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88&quot;&gt;/blog/2014/11/25/flume-problem/&lt;/a&gt;&lt;/p&gt;
+</description>
+        <pubDate>Thu, 27 Nov 2014 00:06:52 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/11/27/flume-spooldir-to-hdfs</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/11/27/flume-spooldir-to-hdfs</guid>
+        
+        
+        <category>flume</category>
+        
+      </item>
+    
+      <item>
+        <title>Python 字符编码问题</title>
+        <description>&lt;p&gt;在对字符串进行操作的时候提示：&lt;/p&gt;
+
+&lt;blockquote&gt;
+&lt;p&gt;UnicodeDecodeError: &amp;#39;ascii&amp;#39; codec can&amp;#39;t decode byte 0xe4 in position 0: ordinal not in range(128)&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;对于这种字符编码的问题有个一劳永逸的方法，就是在开头加上：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-python&quot; data-lang=&quot;python&quot;&gt;&lt;span class=&quot;kn&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;sys&lt;/span&gt;
+
+&lt;span class=&quot;nb&quot;&gt;reload&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sys&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;sys&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;setdefaultencoding&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&amp;#39;utf8&amp;#39;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</description>
+        <pubDate>Wed, 26 Nov 2014 22:55:23 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/11/26/python-unicode</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/11/26/python-unicode</guid>
+        
+        
+        <category>python</category>
+        
+      </item>
+    
+      <item>
+        <title>HBase java api 介绍</title>
+        <description>&lt;h3&gt;背景介绍&lt;/h3&gt;
+</description>
+        <pubDate>Wed, 26 Nov 2014 00:21:22 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/11/26/hbase-java-api</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/11/26/hbase-java-api</guid>
+        
+        
+        <category>flume</category>
+        
+      </item>
+    
+      <item>
+        <title>Flume 遇到的问题及修改代码解决方案</title>
+        <description>&lt;h3&gt;背景介绍&lt;/h3&gt;
+
+&lt;p&gt;我本来是打算采用 flume 来将线上切割好的日志传输到 HDFS 上面去，采用的就是 flume 提供的 spooldir source&lt;br&gt;
+配置如下：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;&lt;span class=&quot;c&quot;&gt;# example.conf: A single-node Flume configuration&lt;/span&gt;
+
+&lt;span class=&quot;c&quot;&gt;# Name the components on this agent&lt;/span&gt;
+a1.sources &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; r1
+a1.sinks &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; k1
+a1.channels &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+
+&lt;span class=&quot;c&quot;&gt;# Describe/configure the source&lt;/span&gt;
+a1.sources.r1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; spooldir
+a1.sources.r1.ignorePattern &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; ^&lt;span class=&quot;err&quot;&gt;$&lt;/span&gt;
+a1.sources.r1.basenameHeader &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;true&lt;/span&gt;
+a1.sources.r1.basenameHeaderKey &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; filename
+a1.sources.r1.spoolDir &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; /home/work/pi/log/recsys_s_online/recsys_s_online_al/
+
+a1.sources.r1.deserializer.maxLineLength &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 40960
+
+a1.sources.r1.interceptors &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; i1
+a1.sources.r1.interceptors.i1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; static
+a1.sources.r1.interceptors.i1.key &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; hostname
+a1.sources.r1.interceptors.i1.value &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; nj02-rp-5yue-bu-recommend-personal117.nj02.baidu.com
+
+&lt;span class=&quot;c&quot;&gt;# Describe the sink&lt;/span&gt;
+a1.sinks.k1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; hdfs
+a1.sinks.k1.channel &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+a1.sinks.k1.hdfs.path &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; hdfs://nj01-rp-arch-namenode00.nj01.baidu.com:54310/user/rp-rd/ouyanlin/recsys_s_online_al/%&lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;hostname&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+a1.sinks.k1.hdfs.fileType &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; DataStream
+a1.sinks.k1.hdfs.filePrefix &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; %&lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;filename&lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+a1.sinks.k1.hdfs.hdfs.writeFormat&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; Text
+a1.sinks.k1.hdfs.inUsePrefix &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; .
+&lt;span class=&quot;c&quot;&gt;#a1.sinks.k1.hdfs.filePrefix = events-&lt;/span&gt;
+a1.sinks.k1.hdfs.rollInterval&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 900
+a1.sinks.k1.hdfs.rollSize&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+a1.sinks.k1.hdfs.rollCount&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 0
+a1.sinks.k1.hdfs.round &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;true&lt;/span&gt;
+a1.sinks.k1.hdfs.roundValue &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 30
+a1.sinks.k1.hdfs.roundUnit &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; minute
+a1.sinks.k1.hdfs.useLocalTimeStamp &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;true&lt;/span&gt;
+
+&lt;span class=&quot;c&quot;&gt;# Use a channel which buffers events in memory&lt;/span&gt;
+a1.channels.c1.type &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; memory
+a1.channels.c1.capacity &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 1000
+a1.channels.c1.transactionCapacity &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; 100
+
+&lt;span class=&quot;c&quot;&gt;# Bind the source and sink to the channel&lt;/span&gt;
+a1.sources.r1.channels &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+a1.sinks.k1.channel &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; c1
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;实际应用过程中总是出现一个问题，就是老是动不动就抛出异常提示 &amp;quot;File has been modified since being read:&amp;quot;，然后 source 线程就退出了，结果数据就不传输了&lt;/p&gt;
+
+&lt;p&gt;我发现代码里面这块的实现逻辑是这样的：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-java&quot; data-lang=&quot;java&quot;&gt;    &lt;span class=&quot;n&quot;&gt;File&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;File&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getAbsolutePath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;());&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getDeserializer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;close&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// Verify that spooling assumptions hold&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;lastModified&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getLastModified&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;())&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;message&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&amp;quot;File has been modified since being read: &amp;quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;throw&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;IllegalStateException&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;message&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;length&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getLength&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;())&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;message&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&amp;quot;File has changed size since being read: &amp;quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;throw&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;IllegalStateException&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;message&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;程序在判断了一次之后，如果没有符合要求了，就退出了。而我的现实要求，可能需要程序有几次重试，给上游切割程序一点准备的时间，因此我将这块的逻辑修改成这样：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-java&quot; data-lang=&quot;java&quot;&gt;    &lt;span class=&quot;n&quot;&gt;File&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;File&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getAbsolutePath&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;());&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getDeserializer&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;close&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+
+    &lt;span class=&quot;c1&quot;&gt;// Verify that spooling assumptions hold&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;long&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;prevModified&lt;/span&gt;  &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getLastModified&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;long&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;prevLength&lt;/span&gt;    &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;currentFile&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;().&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;getLength&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt;  &lt;span class=&quot;n&quot;&gt;retryTimes&lt;/span&gt;    &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt;  &lt;span class=&quot;n&quot;&gt;maxRetryTimes&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;5&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;while&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;prevModified&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;lastModified&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;())&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;retryTimes&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;maxRetryTimes&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;message&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&amp;quot;File has been modified since being read: &amp;quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;throw&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;IllegalStateException&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;message&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;   
+
+      &lt;span class=&quot;n&quot;&gt;prevModified&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;lastModified&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;prevLength&lt;/span&gt;   &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;length&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;try&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;Thread&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;sleep&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;((&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Math&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;pow&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;retryTimes&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)*&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;5&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1000&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;catch&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;InterruptedException&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;printStackTrace&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;();&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+      &lt;span class=&quot;n&quot;&gt;retryTimes&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;++;&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;prevLength&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;na&quot;&gt;length&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;())&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;String&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;message&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&amp;quot;File has changed size since being read: &amp;quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fileToRoll&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;throw&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;IllegalStateException&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;message&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;程序会重试5次，第一次间隔5秒，第二次10秒....&lt;/p&gt;
+
+&lt;p&gt;这样一来，上游就有了充分的时间准备了&lt;/p&gt;
+
+&lt;p&gt;然后接下来就是编译了，将 mvn 的源置为公司内部的源，然后执行：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;mvn clean install -Dmaven.test.skip&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;nb&quot;&gt;true&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;后面启动 flume 的时候，提示说找不到库：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-text&quot; data-lang=&quot;text&quot;&gt;org.apache.flume.conf.file.AbstractFileConfigurationProvider$FileWatcherRunnable.run(AbstractFileConfigurationProvider.java:207)] Failed to start agent because dependencies were not found in classpath. Error follows.
+java.lang.NoClassDefFoundError: org/apache/hadoop/io/SequenceFile$CompressionType
+    at org.apache.flume.sink.hdfs.HDFSEventSink.configure(HDFSEventSink.java:214)
+    at org.apache.flume.conf.Configurables.configure(Configurables.java:41)
+    ... ...
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;后面弄了5个包到 flume 的 lib 下面就好使了：&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;hadoop-core-1.0.4.jar&lt;/li&gt;
+&lt;li&gt;commons-configuration-1.6.jar&lt;/li&gt;
+&lt;li&gt;commons-httpclient-3.0.1.jar&lt;/li&gt;
+&lt;li&gt;jets3t-0.6.1.jar&lt;/li&gt;
+&lt;li&gt;commons-codec-1.4.jar&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        <pubDate>Tue, 25 Nov 2014 23:30:42 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/11/25/flume-problem</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/11/25/flume-problem</guid>
+        
+        
+        <category>flume</category>
+        
+      </item>
+    
+      <item>
+        <title>基于 Flume + HBase + Impala 的实时流式日志收集系统介绍</title>
+        <description>&lt;h3&gt;背景介绍&lt;/h3&gt;
+
+&lt;p&gt;国际化需要弄一个日志实时分析的系统，包括运营数据统计，监控等等&lt;br&gt;
+所以首先就需要一个实时的日志收集系统，来实时的将线上集群的数据实时的传输到集群上去&lt;/p&gt;
+
+&lt;h3&gt;解决方案&lt;/h3&gt;
+
+&lt;p&gt;底层的 DB 存储采用 HBase 来实现，采用 HBase 的优势在于存储的格式比较灵活，可以存储一些统计信息&lt;/p&gt;
+</description>
+        <pubDate>Tue, 25 Nov 2014 23:14:42 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/11/25/streaming-log-transport-system</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/11/25/streaming-log-transport-system</guid>
+        
+        
+        <category>flume</category>
+        
+        <category>hbase</category>
+        
+        <category>impala</category>
+        
+        <category>hue</category>
+        
+      </item>
+    
+      <item>
+        <title>Hadoop 运维及使用过程中遇到的各种 case</title>
+        <description>&lt;h3&gt;单台 datanode 磁盘打满，导致集群不可用&lt;/h3&gt;
+
+&lt;p&gt;单台 datanode 打满后，HDFS 写失败，进而导致上层 RegionServer 夯住，即使过一会 datanode 磁盘缓过来了，RS 依旧卡住。但是心跳依旧存在，zookeeper 能检测到 RS 的状态&lt;/p&gt;
+
+&lt;p&gt;后来发现时 hdfs 的配置有问题&lt;br&gt;
+dfs.replication.min 默认是1，但是线上配置的是3。这也就意味着，原本写成功一个副本即为写成功，现在需要写成功3个才算。&lt;br&gt;
+另外一个配置：dfs.replication 则表示默认的副本数（默认为3）&lt;/p&gt;
+</description>
+        <pubDate>Mon, 24 Nov 2014 18:33:52 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/11/24/hadoop-case</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/11/24/hadoop-case</guid>
+        
+        
+        <category>hadoop</category>
+        
+      </item>
+    
+      <item>
+        <title>HBase Shell 命令</title>
+        <description>&lt;h3&gt;HBase Shell 命令&lt;/h3&gt;
+
+&lt;h4&gt;集群相关&lt;/h4&gt;
+
+&lt;table&gt;&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;HBase Shell 命令&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;status&lt;/td&gt;
+&lt;td&gt;返回集群状态信息&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;version&lt;/td&gt;
+&lt;td&gt;返回集群版本信息&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;shutdown&lt;/td&gt;
+&lt;td&gt;关闭集群!!!&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;tools&lt;/td&gt;
+&lt;td&gt;列出 HBase 所支持的工具&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+
+&lt;h4&gt;表相关&lt;/h4&gt;
+
+&lt;table&gt;&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;HBase Shell 命令&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;list&lt;/td&gt;
+&lt;td&gt;列出集群所有的表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;describe&lt;/td&gt;
+&lt;td&gt;列出一个表的信息&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;create&lt;/td&gt;
+&lt;td&gt;创建一个表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;count&lt;/td&gt;
+&lt;td&gt;统计一个表的行数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;exists&lt;/td&gt;
+&lt;td&gt;判断一个表是否存在&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;scan&lt;/td&gt;
+&lt;td&gt;遍历一个表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;disable&lt;/td&gt;
+&lt;td&gt;禁用一个表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;drop&lt;/td&gt;
+&lt;td&gt;删除一个表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;enable&lt;/td&gt;
+&lt;td&gt;启用一个表&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;alert&lt;/td&gt;
+&lt;td&gt;修改列族模式&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;truncate&lt;/td&gt;
+&lt;td&gt;重新创建一张表（表会被清空）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+
+&lt;h4&gt;数据操作&lt;/h4&gt;
+
+&lt;table&gt;&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;HBase Shell 命令&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;get&lt;/td&gt;
+&lt;td&gt;获取行或单元的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;put&lt;/td&gt;
+&lt;td&gt;插入或更新行&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;delete&lt;/td&gt;
+&lt;td&gt;删除某个单元的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;deleteall&lt;/td&gt;
+&lt;td&gt;删除某个行全部单元的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;incr&lt;/td&gt;
+&lt;td&gt;增加某个单元的值&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+
+&lt;h4&gt;其他&lt;/h4&gt;
+
+&lt;table&gt;&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;HBase Shell 命令&lt;/th&gt;
+&lt;th&gt;描述&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;exit&lt;/td&gt;
+&lt;td&gt;退出 Shell&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;&lt;/table&gt;
+</description>
+        <pubDate>Sun, 09 Nov 2014 01:20:00 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/11/09/hbase-shell</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/11/09/hbase-shell</guid>
+        
+        
+        <category>hbase</category>
+        
+      </item>
+    
+      <item>
+        <title>HDFS RESTful 接口</title>
+        <description>&lt;h3&gt;HDFS 支持 RESTful 接口&lt;/h3&gt;
+
+&lt;p&gt;首先要配置 hdfs-site.xml 添加：&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-text&quot; data-lang=&quot;text&quot;&gt;&amp;lt;property&amp;gt;
+  &amp;lt;name&amp;gt;dfs.webhdfs.enabled&amp;lt;/name&amp;gt;
+  &amp;lt;value&amp;gt;true&amp;lt;/value&amp;gt;
+&amp;lt;/property&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;然后就可以访问了，例如获取 HDFS 根目录下的所有文件列表：&lt;br&gt;
+http://${NameNode-hostname}:${PORT}/webhdfs/v1/?op=liststatus&lt;br&gt;
+其中 PORT 为 NameNode 的 http 端口&lt;/p&gt;
+</description>
+        <pubDate>Sat, 25 Oct 2014 05:03:02 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/10/25/hdfs-restful</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/10/25/hdfs-restful</guid>
+        
+        
+        <category>hadoop</category>
+        
+      </item>
+    
+      <item>
+        <title>HBase 操作记录</title>
+        <description>&lt;h3&gt;调整 hbase.hregion.max.filesize 配置&lt;/h3&gt;
+
+&lt;p&gt;hbase.hregion.max.filesize&lt;br&gt;
+用于设置 HRegion 的最大大小，当一个 region 大小达到这个值时，就会发生 split&lt;br&gt;
+默认值是10G，但当时搭建集群的时候，考虑到 holmes 产品都是大表结构，所以加了个0...&lt;br&gt;
+现在的问题是值太大，region 太大，性能太差，所以值要调回去&lt;/p&gt;
+
+&lt;p&gt;虽然意识到 split 操作是 RegionServer 主导的，但最开始还是先修改了 master 的配置&lt;br&gt;
+重启 master 之后发现是没有生效的&lt;/p&gt;
+
+&lt;p&gt;后面通过 noah 上线的方式修改了所有的 RegionServer 的配置之后，接下来就是要滚动重启了&lt;/p&gt;
+
+&lt;p&gt;通过下面的命令可以从 zookeeper 上面获取到所有的在线 RegionServer&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;zkCli.sh ls /hbase/rs
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;然后就是在中控机遍历这些机器，挨个进行 graceful 重启&lt;/p&gt;
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-bash&quot; data-lang=&quot;bash&quot;&gt;hbase/bin/graceful_stop.sh --restart --reload --debug &lt;span class=&quot;nv&quot;&gt;$host&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;非常蛋疼的一件事情是：这个 graceful 重启在本机针对本机进行的时候，需要输入 ssh 密码...&lt;br&gt;
+所以得在中控机利用信任关系进行重启...&lt;/p&gt;
+
+&lt;p&gt;整个重启过程异常的慢，一整天时间才重启了90多台机器&lt;/p&gt;
+</description>
+        <pubDate>Wed, 22 Oct 2014 22:18:22 +0800</pubDate>
+        <link>http://yourdomain.com/blog/2014/10/22/hbase-operation</link>
+        <guid isPermaLink="true">http://yourdomain.com/blog/2014/10/22/hbase-operation</guid>
+        
+        
+        <category>hbase</category>
+        
+      </item>
+    
+  </channel>
+</rss>
